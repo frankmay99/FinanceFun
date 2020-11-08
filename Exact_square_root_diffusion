@@ -1,0 +1,34 @@
+#Before I was using the Euler formula to numerically estimate the differential process
+#I now use a slightly more involved process to generate an unbiased sample of Monte Carlo paths
+#Interestingly, the Euler approximation is actually done once discretising in this manner, not the other way round
+#A useful property is that this process is positive when 2 * kappa * theta > variance of errors
+#This is known as the Feller condition, which when market-implied parameter values are substituted in is satisfied
+#However, when using exactly discretised square root diffusion to model stochastic variance, this rarely holds- another model must be found 
+
+import math
+import numpy as np
+import numpy.random as npr
+from pylab import plt, mpl
+plt.style.use('seaborn')
+mpl.rcParams['font.family'] = 'sans'
+
+def srd_exact(x0, intervals, T, paths, kappa, theta, sigma):
+    x = np.zeros((intervals+1, paths))
+    x[0] = x0
+    for t in range(1, intervals+1):
+        df = (4 * theta * kappa) / sigma ** 2
+        c = (sigma ** 2 * (1 - np.exp(-kappa * (T / intervals))))/ (4 * kappa)
+        nc = np.exp(-kappa * (T/intervals)) / c * x[t-1]
+        x[t] = c * npr.noncentral_chisquare(df, nc, size=paths)
+    return x
+    
+x1 = srd_exact(0.05, 50, 2, 10000, 3, 0.02, 0.1)
+
+plt.figure(figsize=(10,6))
+plt.plot(x1[:, :25], lw = 1)
+plt.xlabel('time')
+plt.ylabel('index')
+plt.figure(figsize=(10,6))
+plt.hist(x1[-1], bins=50)
+plt.xlabel('value')
+plt.ylabel('frequency')
