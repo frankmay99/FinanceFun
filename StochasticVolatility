@@ -1,0 +1,79 @@
+#I'm introducing Heston's model for stochastic volatility
+#The Brownian motion that defines the stochasticism in the volatility function and the price index function are positively correlated
+#I am using Euler-disretised square root diffusion to model the volatility, and the geometric brownian motion for the price index
+#Cholesky matrix is used to take into account the correlation between the brownian motion in the volatility and the price index
+
+import math
+import numpy as np
+import numpy.random as npr
+from pylab import plt, mpl
+plt.style.use('seaborn')
+mpl.rcParams['font.family'] = 'sans'
+
+def vol(paths, T, v0, intervals, kappa, theta, sigma, rho):
+   
+    ran_num = npr.standard_normal((2, intervals + 1, paths))
+    dt = T/intervals;
+
+    corr_mat = np.zeros((2, 2));
+    corr_mat[0, :] = [1, rho];
+    corr_mat[1, :] = [rho, 1];
+    cho_mat = np.linalg.cholesky(corr_mat);                       
+    
+    v = np.zeros_like(ran_num[0])
+    vh = np.zeros_like(v)
+    
+    v[0] = v0
+    vh[0] = v0
+    
+    for t in range(1, intervals+1):
+        ran = np.dot(cho_mat, ran_num[:, t, :])
+        vh[t] = (vh[t-1] + kappa * (theta - np.maximum(vh[t-1], 0)) * dt + sigma * np.sqrt(np.maximum(vh[t-1], 0)) * math.sqrt(dt) * ran[1])
+    v = np.maximum(vh, 0)
+    return v
+
+def price_sim(init, intervals, paths, r, v, rho, T):
+    corr_mat = np.zeros((2, 2));
+    corr_mat[0, :] = [1, rho];
+    corr_mat[1, :] = [rho, 1];
+    cho_mat = np.linalg.cholesky(corr_mat);                       
+    ran_num = npr.standard_normal((2, intervals + 1, paths))
+    dt = T/intervals;
+    
+    S = np.zeros_like(ran_num[0])
+    S[0] = init
+    for t in range(1, intervals+1):
+        ran = np.dot(cho_mat, ran_num[:, t, :])
+        S[t] = S[t-1] * np.exp((r - 0.5 * v[t]) * dt + np.sqrt(v[t]) * ran[0] * np.sqrt(dt))
+    return S
+
+def stochastic_GBM(paths, T, intervals, kappa, theta, sigma, rho, init, r, v0):
+    corr_mat = np.zeros((2, 2));
+    corr_mat[0, :] = [1, rho];
+    corr_mat[1, :] = [rho, 1];
+    cho_mat = np.linalg.cholesky(corr_mat);
+    
+    dt = T/intervals;
+    
+    ran_num = npr.standard_normal((2, intervals + 1, paths))
+
+    v = vol(paths, T, v0, intervals, kappa, theta, sigma, rho)
+    
+    S = price_sim(init, intervals, paths, r, v, rho, T)
+    
+    return S, v
+
+S, v = stochastic_GBM(10000, 2, 50, 3, 0.25, 0.1, 0.6, 100, 0.05, 0.1)
+
+fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10,6));
+ax1.hist(S[-1], bins=50)
+ax1.set_ylabel('frequency');
+ax1.set_xlabel('index level');
+ax2.hist(v[-1], bins=50);
+ax2.set_xlabel('volatility');
+fig, (ax1, ax2) = plt.subplots(2,1,sharex=True,figsize=(10,6));
+ax1.plot(S[:, :15], lw=1.5)
+ax1.set_ylabel('index level');
+ax2.plot(v[:, :15], lw=1.5);
+ax2.set_xlabel('time');
+ax2.set_ylabel('volatility');
